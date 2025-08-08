@@ -1,0 +1,45 @@
+{
+  "name": "reminder-desktop-app",
+  "productName": "Reminder & Follow-Up",
+  "version": "1.0.0",
+  "description": "Reminder & Follow-Up Dashboard as Desktop App",
+  "main": "main.js",
+  "author": "Your Name",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "electron": "^30.0.0",
+    "electron-builder": "^24.8.0"
+  },
+  "build": {
+    "appId": "com.yourdomain.reminder",
+    "productName": "Reminder & Follow-Up",
+    "files": [
+      "**/*",
+      "!node_modules/*/{README.md,.github,.gitignore}",
+      "!**/*.map"
+    ],
+    "directories": {
+      "buildResources": "build"
+    },
+    "win": {
+      "target": [
+        "portable"
+      ],
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowElevation": true,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": "true",
+      "createStartMenuShortcut": "true"
+    }
+  }
+}

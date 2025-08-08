@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en" >
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Reminder & Follow-Up Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+    };
+  </script>
+  <style>
+    /* Compact styles for table and form */
+    table td, table th {
+      padding: 0.25rem 0.5rem;
+      font-size: 0.85rem;
+      white-space: nowrap;
+      max-width: 130px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      vertical-align: middle;
+    }
+    #addForm input, #addForm select, #addForm textarea, #addForm button {
+      font-size: 0.85rem;
+      padding: 0.4rem 0.6rem;
+    }
+    #tagDropdown li {
+      font-size: 0.85rem;
+    }
+  </style>
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 min-h-screen text-gray-800 dark:text-gray-200">
+  <div class="max-w-6xl mx-auto p-3 grid grid-cols-[minmax(280px,1fr)_minmax(400px,2fr)] gap-4">
+    <header class="col-span-2 flex items-center justify-between mb-2 flex-wrap gap-2">
+      <h1 class="text-2xl font-bold text-indigo-600 dark:text-indigo-400">📋 Reminder & Follow-Up</h1>
+      <div class="flex items-center gap-2 flex-wrap text-sm">
+        <label class="flex items-center gap-1">
+          <input type="checkbox" id="enableAlerts" checked /> Enable Alerts
+        </label>
+        <button onclick="exportCSV()" class="bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700">⬇️ Export CSV</button>
+        <button onclick="downloadBackup()" class="bg-yellow-500 text-white px-3 py-1 rounded">📦 Backup</button>
+        <input type="file" accept=".json" onchange="uploadBackup(event)" class="hidden" id="uploadBackup" />
+        <button onclick="document.getElementById('uploadBackup').click()" class="bg-blue-500 text-white px-3 py-1 rounded">📤 Restore</button>
+        <button onclick="toggleDarkMode()" class="bg-gray-800 text-white px-3 py-1 rounded">🌓 Dark Mode</button>
+      </div>
+    </header>
+
+    <form id="addForm" class="space-y-3 bg-white dark:bg-gray-800 p-4 rounded-xl shadow max-h-[85vh] overflow-y-auto">
+      <input type="text" id="name" placeholder="Name" required class="border rounded w-full" />
+      <input type="date" id="date" required class="border rounded w-full" />
+      <textarea id="note" placeholder="Add a note..." class="border rounded w-full resize-none"></textarea>
+
+      <div class="relative">
+        <input type="text" id="tags" placeholder="Tags / Linked Quote" autocomplete="off" class="border rounded w-full pr-8" />
+        <button type="button" id="toggleTagDropdown" class="absolute right-1 top-1/2 -translate-y-1/2 bg-indigo-600 text-white rounded px-2 py-0.5 text-xs hover:bg-indigo-700">▼</button>
+        <ul id="tagDropdown" class="absolute bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded max-h-32 overflow-auto w-full z-10 hidden"></ul>
+      </div>
+
+      <select id="status" class="border rounded w-full">
+        <option value="Pending">Pending</option>
+        <option value="Completed">Completed</option>
+      </select>
+      <select id="priority" class="border rounded w-full">
+        <option value="High">High</option>
+        <option value="Medium">Medium</option>
+        <option value="Low">Low</option>
+      </select>
+
+      <label class="flex items-center gap-2">
+        <input type="checkbox" id="autoSnooze" checked /> Auto-snooze (recreate 7 days later when marked completed)
+      </label>
+
+      <button type="submit" class="w-full bg-indigo-600 text-white font-semibold py-2 rounded hover:bg-indigo-700">➕ Add Follow-Up</button>
+    </form>
+
+    <section class="flex flex-col gap-2">
+      <div class="flex flex-wrap gap-2 items-center text-sm">
+        <input type="text" id="filterName" placeholder="Search by name..." oninput="renderTable()" class="border rounded px-3 py-1 flex-grow min-w-[140px]" />
+        <select id="filterStatus" onchange="renderTable()" class="border rounded px-2 py-1 max-w-[150px]">
+          <option value="">All Status</option>
+          <option value="Pending">Pending</option>
+          <option value="Completed">Completed</option>
+        </select>
+        <input type="date" id="filterFrom" onchange="renderTable()" class="border rounded px-2 py-1 max-w-[140px]" />
+        <input type="date" id="filterTo" onchange="renderTable()" class="border rounded px-2 py-1 max-w-[140px]" />
+        <select id="sortBy" onchange="renderTable()" class="border rounded px-2 py-1 max-w-[150px]">
+          <option value="date">Sort by Date</option>
+          <option value="name">Sort by Name</option>
+          <option value="priority">Sort by Priority</option>
+        </select>
+      </div>
+
+      <div id="summaryBar" class="font-semibold text-xs text-gray-700 dark:text-gray-300 mt-1"></div>
+
+      <div class="overflow-x-auto bg-white dark:bg-gray-800 shadow rounded-xl mt-1 flex-grow min-h-[150px]">
+        <table class="w-full table-auto text-left hidden md:table">
+          <thead class="bg-gray-50 dark:bg-gray-700 text-xs">
+            <tr>
+              <th class="p-1">⭐</th>
+              <th class="p-1 max-w-[110px]">Name</th>
+              <th class="p-1">Date</th>
+              <th class="p-1 max-w-[140px]">Note</th>
+              <th class="p-1 max-w-[100px]">Tags</th>
+              <th class="p-1">Status</th>
+              <th class="p-1">Priority</th>
+              <th class="p-1">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="followupBody" class="divide-y"></tbody>
+        </table>
+      </div>
+
+      <div id="mobileCards" class="md:hidden flex flex-col gap-2 mt-2"></div>
+    </section>
+
+  </div>
+
+  <div id="notify" class="hidden fixed top-4 right-4 bg-gray-900 text-white px-4 py-2 rounded shadow-lg z-50 text-sm"></div>
+
+  <audio id="alertSound" src="https://www.soundjay.com/buttons/sounds/button-3.mp3" preload="auto"></audio>
+
+  <!-- Full improved code here (unchanged layout) -->
+<!-- [Paste starts here, same as your original up to <script>] -->
+...
+<script>
+  let followups = JSON.parse(localStorage.getItem("followups") || "[]");
+  let isDark = localStorage.getItem("darkMode") === "true";
+  let editingId = null;
+
+  const predefinedTags = ["Important", "Follow-Up", "Urgent", "Client A", "Client B", "Meeting", "Call", "Email"];
+
+  const tagsInput = document.getElementById("tags");
+  const tagDropdown = document.getElementById("tagDropdown");
+  const toggleBtn = document.getElementById("toggleTagDropdown");
+
+  document.addEventListener("DOMContentLoaded", () => {
+    if (isDark) document.documentElement.classList.add("dark");
+
+    const savedSort = localStorage.getItem("sortBy");
+    if (savedSort) document.getElementById("sortBy").value = savedSort;
+
+    renderTable();
+  });
+
+  document.getElementById("addForm").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const name = document.getElementById("name").value.trim();
+    const date = document.getElementById("date").value;
+    const note = document.getElementById("note").value.trim();
+    const tags = document.getElementById("tags").value.trim();
+    const status = document.getElementById("status").value;
+    const priority = document.getElementById("priority").value;
+    const autoSnooze = document.getElementById("autoSnooze").checked;
+
+    if (!name || !date) return alert("Name and date required!");
+
+    const data = {
+      id: editingId || Date.now(),
+      name, date, note, tags, status, priority,
+      autoSnooze,
+      starred: editingId ? followups.find(f => f.id === editingId)?.starred || false : false
+    };
+
+    if (editingId) {
+      const idx = followups.findIndex(f => f.id === editingId);
+      if (idx !== -1) followups[idx] = data;
+    } else {
+      followups.push(data);
+    }
+
+    editingId = null;
+    e.target.reset();
+    saveData();
+    renderTable();
+  });
+
+  function saveData() {
+    localStorage.setItem("followups", JSON.stringify(followups));
+  }
+
+  function renderTable() {
+    const tbody = document.getElementById("followupBody");
+    const mobile = document.getElementById("mobileCards");
+    tbody.innerHTML = "";
+    mobile.innerHTML = "";
+
+    const nameFilter = document.getElementById("filterName").value.toLowerCase();
+    const statusFilter = document.getElementById("filterStatus").value;
+    const from = document.getElementById("filterFrom").value;
+    const to = document.getElementById("filterTo").value;
+    const sort = document.getElementById("sortBy").value;
+
+    localStorage.setItem("sortBy", sort);
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    let overdue = 0, todayCount = 0, upcoming = 0;
+
+    const filtered = followups
+      .filter(f => (!nameFilter || f.name.toLowerCase().includes(nameFilter)))
+      .filter(f => (!statusFilter || f.status === statusFilter))
+      .filter(f => (!from || f.date >= from))
+      .filter(f => (!to || f.date <= to))
+      .sort((a, b) => {
+        if (sort === "name") return a.name.localeCompare(b.name);
+        if (sort === "priority") return ["High", "Medium", "Low"].indexOf(a.priority) - ["High", "Medium", "Low"].indexOf(b.priority);
+        return new Date(a.date) - new Date(b.date);
+      });
+
+    filtered.forEach(f => {
+      const taskDate = new Date(f.date);
+      taskDate.setHours(0, 0, 0, 0);
+      const isOverdue = f.status === "Pending" && taskDate < today;
+      const isToday = f.status === "Pending" && taskDate.getTime() === today.getTime();
+      const rowClass = isOverdue ? "bg-red-100 dark:bg-red-900" : isToday ? "bg-yellow-100 dark:bg-yellow-800" : "";
+      const starredClass = f.starred ? "bg-indigo-50 dark:bg-indigo-900" : "";
+
+      if (isOverdue) overdue++;
+      else if (isToday) todayCount++;
+      else if (f.status === "Pending") upcoming++;
+
+      const waMessage = encodeURIComponent(
+        `Follow-Up Status:\n` +
+        `Name: ${f.name}\n` +
+        `Date: ${f.date}\n` +
+        (f.note ? `Note: ${f.note}\n` : "") +
+        (f.tags ? `Tags: ${f.tags}\n` : "") +
+        `Status: ${f.status}\n` +
+        `Priority: ${f.priority}`
+      );
+
+      tbody.innerHTML += `
+        <tr class="${rowClass} ${starredClass}">
+          <td class="p-1 text-center cursor-pointer" onclick="toggleStar(${f.id})" title="Toggle Star">${f.starred ? "⭐" : "☆"}</td>
+          <td class="p-1 truncate max-w-[110px]" title="${f.name}">${f.name}</td>
+          <td class="p-1">${f.date}</td>
+          <td class="p-1 truncate max-w-[140px]" title="${f.note}">${f.note}</td>
+          <td class="p-1 truncate max-w-[100px]" title="${f.tags}">${f.tags}</td>
+          <td class="p-1">${f.status}</td>
+          <td class="p-1">${f.priority}</td>
+          <td class="p-1 space-x-1 text-center">
+            <button onclick="editFollowUp(${f.id})" class="text-blue-600" title="Edit">✏️</button>
+            <button onclick="deleteFollowUp(${f.id})" class="text-red-600" title="Delete">🗑️</button>
+            <button onclick="toggleStatus(${f.id})" class="text-green-600" title="Toggle Status">${f.status === "Pending" ? "✅" : "↩️"}</button>
+            <a href="https://wa.me/?text=${waMessage}" target="_blank" rel="noopener" class="text-green-700 hover:text-green-900" title="Send WhatsApp">📱</a>
+          </td>
+        </tr>`;
+
+      mobile.innerHTML += `
+        <div class="p-2 rounded border ${rowClass} ${starredClass} text-xs">
+          <div class="flex justify-between items-center font-semibold">${f.name}
+            <span onclick="toggleStar(${f.id})" class="cursor-pointer" title="Toggle Star">${f.starred ? "⭐" : "☆"}</span>
+          </div>
+          <div class="text-xs">${f.date} • ${f.priority} • ${f.status}</div>
+          <div class="mt-1 truncate" title="${f.note}">${f.note}</div>
+          <div class="text-xs text-gray-500 truncate" title="${f.tags}">${f.tags}</div>
+          <div class="flex gap-2 mt-2 flex-wrap">
+            <button onclick="editFollowUp(${f.id})" class="text-blue-600 text-xs" title="Edit">✏️</button>
+            <button onclick="deleteFollowUp(${f.id})" class="text-red-600 text-xs" title="Delete">🗑️</button>
+            <button onclick="toggleStatus(${f.id})" class="text-green-600 text-xs" title="Toggle Status">${f.status === "Pending" ? "✅" : "↩️"}</button>
+            <a href="https://wa.me/?text=${waMessage}" target="_blank" rel="noopener" class="text-green-700 text-xs hover:text-green-900" title="Send WhatsApp">📱</a>
+          </div>
+        </div>`;
+    });
+
+    if (filtered.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="8" class="text-center p-4 text-gray-500">No follow-ups found.</td></tr>`;
+    }
+
+    document.getElementById("summaryBar").innerText = `🔴 Overdue: ${overdue} | 🟡 Today: ${todayCount} | 🟢 Upcoming: ${upcoming}`;
+  }
+
+  function toggleStar(id) {
+    const f = followups.find(f => f.id === id);
+    f.starred = !f.starred;
+    saveData(); renderTable();
+  }
+
+  function deleteFollowUp(id) {
+    if (!confirm("Delete this follow-up?")) return;
+    followups = followups.filter(f => f.id !== id);
+    saveData(); renderTable();
+  }
+
+  function editFollowUp(id) {
+    const f = followups.find(f => f.id === id);
+    if (!f) return;
+    editingId = id;
+    document.getElementById("name").value = f.name;
+    document.getElementById("date").value = f.date;
+    document.getElementById("note").value = f.note;
+    document.getElementById("tags").value = f.tags;
+    document.getElementById("status").value = f.status;
+    document.getElementById("priority").value = f.priority;
+    document.getElementById("autoSnooze").checked = f.autoSnooze;
+  }
+
+  function toggleStatus(id) {
+    const f = followups.find(f => f.id === id);
+    if (!f) return;
+    if (f.status === "Pending") {
+      f.status = "Completed";
+      if (f.autoSnooze) {
+        const newDate = new Date(f.date);
+        newDate.setDate(newDate.getDate() + 7);
+        followups.push({ ...f, id: Date.now(), status: "Pending", date: newDate.toISOString().split("T")[0] });
+      }
+    } else {
+      f.status = "Pending";
+    }
+    saveData(); renderTable();
+  }
+
+  function toggleDarkMode() {
+    isDark = !isDark;
+    localStorage.setItem("darkMode", isDark);
+    document.documentElement.classList.toggle("dark", isDark);
+  }
+
+  function exportCSV() {
+    let csv = "Name,Date,Note,Tags,Status,Priority\n";
+    followups.forEach(f => {
+      csv += `"${f.name.replace(/"/g, '""')}","${f.date}","${f.note.replace(/"/g, '""')}","${f.tags.replace(/"/g, '""')}","${f.status}","${f.priority}"\n`;
+    });
+    const blob = new Blob([csv], { type: "text/csv" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "followups.csv";
+    a.click();
+  }
+
+  function downloadBackup() {
+    const blob = new Blob([JSON.stringify(followups)], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "followup-backup.json";
+    a.click();
+  }
+
+  function uploadBackup(event) {
+    const reader = new FileReader();
+    reader.onload = function (e) {
+      try {
+        const data = JSON.parse(e.target.result);
+        if (Array.isArray(data)) {
+          followups = data;
+          saveData(); renderTable();
+        }
+      } catch {
+        alert("Invalid backup file.");
+      }
+    };
+    reader.readAsText(event.target.files[0]);
+  }
+
+  function updateDropdown() {
+    const currentVal = tagsInput.value;
+    const existingTags = currentVal.split(",").map(t => t.trim().toLowerCase()).filter(Boolean);
+    const availableTags = predefinedTags.filter(t => !existingTags.includes(t.toLowerCase()));
+
+    if (availableTags.length === 0) {
+      tagDropdown.innerHTML = '<li class="p-2 text-gray-500 dark:text-gray-300">No tags available</li>';
+    } else {
+      tagDropdown.innerHTML = availableTags.map(t => `<li class="p-2 hover:bg-indigo-100 dark:hover:bg-indigo-600 cursor-pointer">${t}</li>`).join("");
+    }
+    tagDropdown.style.display = availableTags.length ? "block" : "none";
+
+    [...tagDropdown.children].forEach(li => {
+      li.onclick = (e) => {
+        e.stopPropagation();
+        const newTags = currentVal ? currentVal + ", " + li.textContent : li.textContent;
+        tagsInput.value = newTags;
+        tagDropdown.style.display = "none";
+        tagsInput.focus();
+      };
+    });
+  }
+
+  toggleBtn.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (tagDropdown.style.display === "block") {
+      tagDropdown.style.display = "none";
+    } else {
+      updateDropdown();
+    }
+  });
+
+  tagsInput.addEventListener("input", () => {
+    updateDropdown();
+  });
+
+  document.addEventListener("click", e => {
+    if (!tagsInput.contains(e.target) && !tagDropdown.contains(e.target) && !toggleBtn.contains(e.target)) {
+      tagDropdown.style.display = "none";
+    }
+  });
+</script>
+
